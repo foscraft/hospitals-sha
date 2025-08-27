@@ -1,9 +1,9 @@
 import os
 import streamlit as st
-from streamlit_folium import st_folium
+import streamlit.components.v1 as components
 
-from database_engine import get_connection  
-from map_utils import get_type_color_map, create_facility_map, add_legend
+from database_engine import get_connection
+from map_utils import get_type_color_map, create_facility_map
 from stats_utils import show_statistics, plot_charts
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -106,10 +106,9 @@ def main():
     # --- Map Section ---
     st.subheader("🗺️ Map of Health Facilities")
     with st.spinner("Rendering map..."):
-        m = create_facility_map(filtered_df, type_color_map,
-                                county=selected_county, constituency=selected_constituency)
-        add_legend(m, type_color_map)
-        st_folium(m, use_container_width=True, height=700)
+        html_content = create_facility_map(filtered_df, type_color_map,
+                                          county=selected_county, constituency=selected_constituency)
+        components.html(html_content, height=700)
 
     # --- Stats & Charts ---
     st.subheader("📈 Detailed Analysis")
