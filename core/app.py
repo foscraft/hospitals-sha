@@ -1,59 +1,50 @@
 import os
 import streamlit as st
 from streamlit_folium import st_folium
-import duckdb
 from data_loader import load_data
 from map_utils import get_type_color_map, create_facility_map, add_legend
 from stats_utils import show_statistics, plot_charts
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-st.set_page_config(page_title="Health Facilities in Kenya", layout="wide", page_icon=os.path.join(BASE_DIR, '..', 'images', 'favicon.ico'),)
+st.set_page_config(
+    page_title="Health Facilities in Kenya",
+    layout="wide",
+    page_icon=os.path.join(BASE_DIR, '..', 'images', 'favicon.ico'),
+)
 st.title("Health Facilities in Kenya")
-st.markdown("This app visualizes health facility locations and provides statistical analysis. Zoom in/out on the map and explore the stats below.")
+st.markdown("This app visualizes health facility locations and provides statistical analysis.")
 
-#@st.cache_data(show_spinner="Preparing DuckDB...")
-def get_duckdb_connection(df):
-    con = duckdb.connect(database=':memory:')
-    con.register('facilities', df)
-    return con
-
-def get_filter_options(con):
-    counties = con.execute("SELECT DISTINCT County FROM facilities ORDER BY County").fetchdf()['County'].dropna().tolist()
+@st.cache_data(show_spinner=False)
+def get_filter_options(df):
+    counties = sorted(df['County'].dropna().unique().tolist())
     return ['All'] + counties
 
-def get_constituency_options(con, selected_county):
+@st.cache_data(show_spinner=False)
+def get_constituency_options(df, selected_county):
     if selected_county != 'All':
-        query = "SELECT DISTINCT Constituen FROM facilities WHERE County = ? ORDER BY Constituen"
-        params = (selected_county,)
+        constituencies = sorted(df.loc[df['County'] == selected_county, 'Constituen'].dropna().unique().tolist())
     else:
-        query = "SELECT DISTINCT Constituen FROM facilities ORDER BY Constituen"
-        params = ()
-    constituencies = con.execute(query, params).fetchdf()['Constituen'].dropna().tolist()
+        constituencies = sorted(df['Constituen'].dropna().unique().tolist())
     return ['All'] + constituencies
 
-def filter_facilities(con, county, constituency):
-    query = "SELECT * FROM facilities"
-    conditions = []
-    params = []
+@st.cache_data(show_spinner=False)
+def filter_facilities(df, county, constituency):
+    filtered = df
     if county != 'All':
-        conditions.append("County = ?")
-        params.append(county)
+        filtered = filtered[filtered['County'] == county]
     if constituency != 'All':
-        conditions.append("Constituen = ?")
-        params.append(constituency)
-    if conditions:
-        query += " WHERE " + " AND ".join(conditions)
-    return con.execute(query, params).fetchdf()
+        filtered = filtered[filtered['Constituen'] == constituency]
+    return filtered
+
+@st.cache_resource(show_spinner=False)
+def get_map(df, type_color_map, county, constituency):
+    m = create_facility_map(df, type_color_map, county=county, constituency=constituency)
+    add_legend(m, type_color_map)
+    return m
 
 def main():
-    try:
-        df = load_data()
-    except Exception as e:
-        st.error(f"Error loading data: {e}")
-        st.stop()
-
-    con = get_duckdb_connection(df)
+    df = load_data()
     facility_types = df['Type'].unique()
     type_color_map = get_type_color_map(facility_types)
 
@@ -61,41 +52,36 @@ def main():
     st.subheader("Filter Facilities by County and Constituency")
     col_county, col_const = st.columns(2)
 
+    county_options = get_filter_options(df)
     with col_county:
-        county_options = get_filter_options(con)
         selected_county = st.selectbox("Select a County", options=county_options)
 
+    constituency_options = get_constituency_options(df, selected_county)
     with col_const:
-        constituency_options = get_constituency_options(con, selected_county)
         selected_constituency = st.selectbox("Select a Constituency", options=constituency_options)
 
-    # --- Filtering with DuckDB ---
-    filtered_df = filter_facilities(con, selected_county, selected_constituency)
+    # --- Filtered Data ---
+    filtered_df = filter_facilities(df, selected_county, selected_constituency)
 
-    # --- Map Section (filtered) ---
-    m = create_facility_map(df, type_color_map, county=selected_county, constituency=selected_constituency)
-    add_legend(m, type_color_map)
+    # --- Map Section ---
     st.subheader("Map of Health Facilities")
+    m = get_map(df, type_color_map, selected_county, selected_constituency)
     st_folium(m, width=2200, height=1200)
 
-    # --- Statistics Section (filtered) ---
+    # --- Stats Section ---
     st.subheader("Statistical Analysis")
     plot_charts(filtered_df)
     show_statistics(filtered_df)
 
-    # --- Data Table Section ---
-    st.markdown(
-        f"### Facilities in "
-        f"{selected_county if selected_county != 'All' else 'All Counties'}"
-        f"{' / ' + selected_constituency if selected_constituency != 'All' else ''}"
-    )
+    # --- Data Table ---
+    st.markdown(f"### Facilities in {selected_county} {'/ ' + selected_constituency if selected_constituency != 'All' else ''}")
     st.dataframe(filtered_df[['Facility_N', 'Type', 'Owner', 'Sub_County', 'Constituen', 'Nearest_To', 'Latitude', 'Longitude']])
 
     csv = filtered_df.to_csv(index=False)
     st.download_button(
         label="Download Filtered Data as CSV",
         data=csv,
-        file_name=f"facilities_{selected_county if selected_county != 'All' else 'all'}_{selected_constituency if selected_constituency != 'All' else 'all'}.csv",
+        file_name=f"facilities_{selected_county}_{selected_constituency}.csv".replace("All", "all"),
         mime="text/csv",
     )
 
