@@ -34,23 +34,25 @@ def get_distinct_counties():
 
 @st.cache_data(show_spinner=False)
 def get_distinct_constituencies(county: str):
+    # Ensure column name matches your database schema
+    column_name = "Constituen"  # Change to "Constituency" if that's the actual column name
     if county != "All":
-        sql = """
-            SELECT DISTINCT Constituen
+        sql = f"""
+            SELECT DISTINCT {column_name}
             FROM facilities
-            WHERE County = ? AND Constituen IS NOT NULL
-            ORDER BY Constituen
+            WHERE County = ? AND {column_name} IS NOT NULL AND TRIM({column_name}) != ''
+            ORDER BY {column_name}
         """
         rows = sql_to_df(sql, (county,))
     else:
-        sql = """
-            SELECT DISTINCT Constituen
+        sql = f"""
+            SELECT DISTINCT {column_name}
             FROM facilities
-            WHERE Constituen IS NOT NULL
-            ORDER BY Constituen
+            WHERE {column_name} IS NOT NULL AND TRIM({column_name}) != ''
+            ORDER BY {column_name}
         """
         rows = sql_to_df(sql)
-    return ["All"] + rows["Constituen"].tolist()
+    return ["All"] + rows[column_name].tolist()
 
 def build_where(county: str, constituency: str):
     clauses, params = [], []
@@ -111,10 +113,10 @@ def main():
 
     st.subheader("📊 Summary Stats")
     total, n_counties, n_const = get_metrics(selected_county, selected_constituency)
-    c1, c2, c3 = st.columns(3)
+    c1, c2 = st.columns(2)
     c1.metric("Total Facilities", f"{total:,}")
     c2.metric("Counties", n_counties)
-    c3.metric("Constituencies", n_const)
+    #c3.metric("Constituencies", n_const)
 
     # --- Facility Types & Colors ---
     types = get_distinct_types()
