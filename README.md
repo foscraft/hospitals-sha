@@ -2,6 +2,8 @@
 
 This interactive dashboard visualizes the locations and statistics of health facilities across Kenya. Built with Streamlit, it provides a user-friendly interface for exploring, filtering, and analyzing healthcare data on a map and through dynamic charts.
 
+### The app is available [here](https://kenyan-health-facilities.streamlit.app/)
+
 ## Features
 
 - **Interactive Map:** Visualize all health facilities in Kenya, color-coded by facility type. Zoom, pan, and click on markers for details.
